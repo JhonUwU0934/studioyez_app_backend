@@ -31,6 +31,9 @@ class AuthController extends Controller
                     'error' => null
                 ], 401);
             }
+
+
+    
         } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
@@ -39,7 +42,7 @@ class AuthController extends Controller
                 'code' => 500,
                 'user' => null,
                 'token' => null,
-                'error' => $e
+                'error' => $e->getMessage()
             ], 500);
         }
         $user = Auth::user();

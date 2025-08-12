@@ -37,7 +37,11 @@ Route::post('/password/reset/check/token', 'App\Http\Controllers\Api\auth\ResetP
 
 
 Route::middleware(['jwt.auth'])->prefix('v1')->group(function () {
+    // TUS RUTAS EXISTENTES (mantener todas)
     Route::post('/factura', 'App\Http\Controllers\Api\FacturaController@createInvoice');
+
+    // Agregar al final del Route::middleware(['jwt.auth'])->prefix('v1')->group()
+    Route::get('productos-diagnostico', [ProductoController::class, 'diagnosticar']);
 
     Route::apiResource('gastos', GastoController::class);
     Route::apiResource('monto', MontoController::class);
@@ -48,8 +52,33 @@ Route::middleware(['jwt.auth'])->prefix('v1')->group(function () {
     Route::apiResource('devolucionalmacenfabrica', DevolucionAlmacenFabricaController::class);
     Route::apiResource('ingresodemercancia', IngresoDeMercanciaController::class);
 
+    // NUEVAS RUTAS PARA LAS NUEVAS FUNCIONALIDADES
+    
+    // Rutas para gestión de colores
+    Route::apiResource('colores', 'App\Http\Controllers\Api\ColorController');
+    
+    // Rutas para gestión de tallas
+    Route::apiResource('tallas', 'App\Http\Controllers\Api\TallaController');
+    
+    // Rutas para gestión de imágenes de productos
+    Route::get('productos/{producto}/imagenes', 'App\Http\Controllers\Api\ProductoImagenController@index');
+    Route::post('productos/imagenes', 'App\Http\Controllers\Api\ProductoImagenController@store');
+    Route::get('productos/imagenes/{imagen}', 'App\Http\Controllers\Api\ProductoImagenController@show');
+    Route::put('productos/imagenes/{imagen}', 'App\Http\Controllers\Api\ProductoImagenController@update');
+    Route::delete('productos/imagenes/{imagen}', 'App\Http\Controllers\Api\ProductoImagenController@destroy');
+    
+    // Rutas para gestión de variantes de productos
+    Route::get('productos/{producto}/variantes', 'App\Http\Controllers\Api\ProductoVarianteController@index');
+    Route::post('productos/variantes', 'App\Http\Controllers\Api\ProductoVarianteController@store');
+    Route::get('productos/variantes/{variante}', 'App\Http\Controllers\Api\ProductoVarianteController@show');
+    Route::put('productos/variantes/{variante}', 'App\Http\Controllers\Api\ProductoVarianteController@update');
+    Route::delete('productos/variantes/{variante}', 'App\Http\Controllers\Api\ProductoVarianteController@destroy');
+    
+    // Rutas específicas para agregar imágenes y variantes a productos existentes
+    Route::post('productos/{producto}/agregar-imagen', 'App\Http\Controllers\Api\ProductoController@agregarImagen');
+    Route::post('productos/{producto}/agregar-variante', 'App\Http\Controllers\Api\ProductoController@agregarVariante');
 
-
+    // TUS RUTAS EXISTENTES (mantener todas las demás)
     Route::get('users', 'App\Http\Controllers\Controller@getUsers');
 
 
