@@ -227,7 +227,7 @@
             </div>
         </div>
 
-        <div class="separator">═══════════════════════════════</div>
+        <div class="separator">*******************************</div>
 
         <!-- Vendor Info -->
         <div class="info-section">
@@ -241,7 +241,7 @@
             </div>
         </div>
 
-        <div class="separator">═══════════════════════════════</div>
+        <div class="separator">*******************************</div>
 
         <!-- Products Table -->
         <div class="table-container">
@@ -276,7 +276,7 @@
         <div class="totals-section">
             <div class="totals-header">
                 <h2>VALORES TOTALES</h2>
-                <h2>═══ STUDIO YEZ ═══</h2>
+                <h2>*** STUDIO YEZ ***</h2>
             </div>
             
             <table class="totals-table">
@@ -295,7 +295,7 @@
             </table>
         </div>
 
-        <div class="separator" style="margin-top: 20px;">═══════════════════════════════</div>
+        <div class="separator" style="margin-top: 20px;">*******************************</div>
         
         <div style="text-align: center; margin-top: 15px; font-size: 11px; color: #666;">
             <div>¡Gracias por su compra!</div>
