@@ -52,6 +52,23 @@ Route::middleware(['jwt.auth'])->prefix('v1')->group(function () {
     Route::apiResource('devolucionalmacenfabrica', DevolucionAlmacenFabricaController::class);
     Route::apiResource('ingresodemercancia', IngresoDeMercanciaController::class);
 
+
+    Route::post('ventas/{id}/pagar-credito', [VentasController::class, 'pagarCredito']);
+    
+    // Obtener lista de créditos pendientes
+    Route::get('creditos-pendientes', [VentasController::class, 'creditosPendientes']);
+    
+    // Extender fecha de promesa de pago
+    Route::post('ventas/{id}/extender-credito', [VentasController::class, 'extenderCredito']);
+    
+    // Ver información detallada de una venta (incluyendo crédito)
+    Route::get('ventas/{id}/detalle-completo', [VentasController::class, 'verDetalleCompleto']);
+    
+    // Obtener resumen de créditos por vendedor
+    Route::get('vendedores/{vendedor}/creditos', [VentasController::class, 'creditosPorVendedor']);
+    
+    // Obtener estadísticas de créditos
+    Route::get('creditos/estadisticas', [VentasController::class, 'estadisticasCreditos']);
     // NUEVAS RUTAS PARA LAS NUEVAS FUNCIONALIDADES
     
     // Rutas para gestión de colores
