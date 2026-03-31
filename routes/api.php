@@ -100,6 +100,118 @@ Route::middleware(['jwt.auth'])->prefix('v1')->group(function () {
     Route::get('users', 'App\Http\Controllers\Controller@getUsers');
 
 
+    Route::get('analytics', function (\Illuminate\Http\Request $request) {
+        $mesActual = now()->month;
+        $anioActual = now()->year;
+        $mesAnterior = now()->subMonth()->month;
+        $anioMesAnterior = now()->subMonth()->year;
+
+        // Top 10 productos más vendidos del mes (por cantidad)
+        $topProductos = DB::table('venta_producto')
+            ->join('ventas', 'venta_producto.id_venta', '=', 'ventas.id')
+            ->join('productos', 'venta_producto.id_producto', '=', 'productos.id')
+            ->whereMonth('ventas.fecha', $mesActual)
+            ->whereYear('ventas.fecha', $anioActual)
+            ->select(
+                'productos.id',
+                'productos.denominacion',
+                'productos.codigo',
+                DB::raw('SUM(venta_producto.cantidad) as total_cantidad'),
+                DB::raw('SUM(venta_producto.total_producto) as total_vendido')
+            )
+            ->groupBy('productos.id', 'productos.denominacion', 'productos.codigo')
+            ->orderByDesc('total_cantidad')
+            ->limit(10)
+            ->get();
+
+        // Top variantes por cada producto top
+        $topConVariantes = $topProductos->map(function ($prod) use ($mesActual, $anioActual) {
+            $variantes = DB::table('venta_producto')
+                ->join('ventas', 'venta_producto.id_venta', '=', 'ventas.id')
+                ->leftJoin('producto_variantes', 'venta_producto.id_producto_variante', '=', 'producto_variantes.id')
+                ->leftJoin('colores', 'producto_variantes.color_id', '=', 'colores.id')
+                ->leftJoin('tallas', 'producto_variantes.talla_id', '=', 'tallas.id')
+                ->where('venta_producto.id_producto', $prod->id)
+                ->whereNotNull('venta_producto.id_producto_variante')
+                ->whereMonth('ventas.fecha', $mesActual)
+                ->whereYear('ventas.fecha', $anioActual)
+                ->select(
+                    'producto_variantes.sku',
+                    'colores.nombre as color',
+                    'tallas.nombre as talla',
+                    DB::raw('SUM(venta_producto.cantidad) as cantidad')
+                )
+                ->groupBy('producto_variantes.sku', 'colores.nombre', 'tallas.nombre')
+                ->orderByDesc('cantidad')
+                ->limit(5)
+                ->get();
+
+            return [
+                'id' => $prod->id,
+                'denominacion' => $prod->denominacion,
+                'codigo' => $prod->codigo,
+                'total_cantidad' => (int) $prod->total_cantidad,
+                'total_vendido' => (float) $prod->total_vendido,
+                'variantes' => $variantes,
+            ];
+        });
+
+        // Comparativo mensual: ventas por día del mes actual
+        $ventasMesActual = DB::table('ventas')
+            ->whereMonth('fecha', $mesActual)
+            ->whereYear('fecha', $anioActual)
+            ->select(
+                DB::raw('DAY(fecha) as dia'),
+                DB::raw('SUM(precio_venta) as total')
+            )
+            ->groupBy(DB::raw('DAY(fecha)'))
+            ->orderBy('dia')
+            ->pluck('total', 'dia');
+
+        // Ventas por día del mes anterior
+        $ventasMesAnterior = DB::table('ventas')
+            ->whereMonth('fecha', $mesAnterior)
+            ->whereYear('fecha', $anioMesAnterior)
+            ->select(
+                DB::raw('DAY(fecha) as dia'),
+                DB::raw('SUM(precio_venta) as total')
+            )
+            ->groupBy(DB::raw('DAY(fecha)'))
+            ->orderBy('dia')
+            ->pluck('total', 'dia');
+
+        // Totales mensuales
+        $totalMesActual = DB::table('ventas')
+            ->whereMonth('fecha', $mesActual)->whereYear('fecha', $anioActual)
+            ->sum('precio_venta');
+        $totalMesAnterior = DB::table('ventas')
+            ->whereMonth('fecha', $mesAnterior)->whereYear('fecha', $anioMesAnterior)
+            ->sum('precio_venta');
+
+        $diferencia = $totalMesActual - $totalMesAnterior;
+        $porcentajeCambio = $totalMesAnterior > 0
+            ? round(($diferencia / $totalMesAnterior) * 100, 1)
+            : ($totalMesActual > 0 ? 100 : 0);
+
+        return response()->json([
+            'top_productos' => $topConVariantes,
+            'comparativo' => [
+                'mes_actual' => [
+                    'nombre' => now()->translatedFormat('F Y'),
+                    'total' => (float) $totalMesActual,
+                    'por_dia' => $ventasMesActual,
+                ],
+                'mes_anterior' => [
+                    'nombre' => now()->subMonth()->translatedFormat('F Y'),
+                    'total' => (float) $totalMesAnterior,
+                    'por_dia' => $ventasMesAnterior,
+                ],
+                'diferencia' => (float) $diferencia,
+                'porcentaje_cambio' => $porcentajeCambio,
+            ],
+        ]);
+    });
+
     Route::get('cierres', function (\Illuminate\Http\Request $request) {
         $periodo = $request->input('periodo', 'dia');
         $limite = (int) $request->input('limite', 90);
