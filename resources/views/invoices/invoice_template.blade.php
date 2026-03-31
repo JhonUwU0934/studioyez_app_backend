@@ -124,12 +124,12 @@
             font-size: 10px;
             margin: 1px 0;
             font-weight: bold;
-            color: #333;
+            color: black;
         }
 
         .product-variant {
             font-size: 9px;
-            color: #666;
+            color: black;
             font-weight: bold;
             margin: 1px 0;
         }

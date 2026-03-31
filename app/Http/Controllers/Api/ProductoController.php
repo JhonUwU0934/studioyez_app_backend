@@ -15,6 +15,35 @@ use App\Models\ProductoVariante;
 
 class ProductoController extends Controller
 {
+    public function search(Request $request)
+    {
+        $query = $request->input('q', '');
+        $limit = min((int) $request->input('limit', 20), 50);
+
+        $productos = Producto::query()
+            ->select('id', 'codigo', 'denominacion', 'existente_en_almacen')
+            ->withCount('variantes')
+            ->when(strlen($query) >= 2, function ($q) use ($query) {
+                $q->where(function ($sub) use ($query) {
+                    $sub->where('denominacion', 'LIKE', "%{$query}%")
+                        ->orWhere('codigo', 'LIKE', "%{$query}%");
+                });
+            })
+            ->orderBy('denominacion')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'codigo' => $p->codigo,
+                'denominacion' => $p->denominacion,
+                'existente_en_almacen' => $p->existente_en_almacen,
+                'variantes_count' => $p->variantes_count,
+                'tiene_variantes' => $p->variantes_count > 0,
+            ]);
+
+        return response()->json(['data' => $productos]);
+    }
+
     public function index()
     {
         try {
