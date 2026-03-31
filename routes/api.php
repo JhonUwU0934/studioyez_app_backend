@@ -45,7 +45,6 @@ Route::middleware(['jwt.auth'])->prefix('v1')->group(function () {
 
     Route::apiResource('gastos', GastoController::class);
     Route::apiResource('monto', MontoController::class);
-    Route::get('productos/search', [ProductoController::class, 'search']);
     Route::apiResource('productos', ProductoController::class);
     Route::apiResource('inventario', InventarioController::class);
     Route::apiResource('ventas', VentasController::class);

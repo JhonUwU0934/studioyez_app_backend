@@ -15,46 +15,46 @@ use App\Models\ProductoVariante;
 
 class ProductoController extends Controller
 {
-    public function search(Request $request)
-    {
-        $query = $request->input('q', '');
-        $limit = min((int) $request->input('limit', 20), 50);
-
-        $builder = DB::table('productos')
-            ->select(
-                'productos.id',
-                'productos.codigo',
-                'productos.denominacion',
-                'productos.existente_en_almacen',
-                DB::raw('(SELECT COUNT(*) FROM producto_variantes WHERE producto_variantes.producto_id = productos.id) as variantes_count')
-            );
-
-        if (strlen($query) >= 2) {
-            $builder->where(function ($sub) use ($query) {
-                $sub->where('denominacion', 'LIKE', "%{$query}%")
-                    ->orWhere('codigo', 'LIKE', "%{$query}%");
-            });
-        }
-
-        $productos = $builder->orderBy('denominacion')
-            ->limit($limit)
-            ->get()
-            ->map(fn ($p) => [
-                'id' => $p->id,
-                'codigo' => $p->codigo,
-                'denominacion' => $p->denominacion,
-                'existente_en_almacen' => $p->existente_en_almacen,
-                'variantes_count' => (int) $p->variantes_count,
-                'tiene_variantes' => $p->variantes_count > 0,
-            ]);
-
-        return response()->json(['data' => $productos]);
-    }
-
-    public function index()
+    public function index(Request $request)
     {
         try {
-            // CARGAR PRODUCTOS CON RELACIONES igual que en SHOW
+            // Búsqueda ligera si viene ?q=
+            if ($request->has('q')) {
+                $query = $request->input('q', '');
+                $limit = min((int) $request->input('limit', 20), 50);
+
+                $builder = DB::table('productos')
+                    ->select(
+                        'productos.id',
+                        'productos.codigo',
+                        'productos.denominacion',
+                        'productos.existente_en_almacen',
+                        DB::raw('(SELECT COUNT(*) FROM producto_variantes WHERE producto_variantes.producto_id = productos.id) as variantes_count')
+                    );
+
+                if (strlen($query) >= 2) {
+                    $builder->where(function ($sub) use ($query) {
+                        $sub->where('denominacion', 'LIKE', "%{$query}%")
+                            ->orWhere('codigo', 'LIKE', "%{$query}%");
+                    });
+                }
+
+                $results = $builder->orderBy('denominacion')
+                    ->limit($limit)
+                    ->get()
+                    ->map(fn ($p) => [
+                        'id' => $p->id,
+                        'codigo' => $p->codigo,
+                        'denominacion' => $p->denominacion,
+                        'existente_en_almacen' => $p->existente_en_almacen,
+                        'variantes_count' => (int) $p->variantes_count,
+                        'tiene_variantes' => $p->variantes_count > 0,
+                    ]);
+
+                return response()->json(['data' => $results]);
+            }
+
+            // Comportamiento original: cargar todos con relaciones
             $productos = Producto::with([
                 'imagenes' => function ($query) {
                     $query->orderBy('orden');
