@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\DevolucionAlmacenFabricaController;
 use App\Models\Monto;
 use App\Models\Ventas;
 use App\Models\Gastos;
+use Illuminate\Support\Facades\DB;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -99,26 +100,100 @@ Route::middleware(['jwt.auth'])->prefix('v1')->group(function () {
     Route::get('users', 'App\Http\Controllers\Controller@getUsers');
 
 
+    Route::get('cierres', function (\Illuminate\Http\Request $request) {
+        $periodo = $request->input('periodo', 'dia');
+        $limite = (int) $request->input('limite', 90);
+
+        if ($periodo === 'semana') {
+            $groupBy = DB::raw('YEAR(fecha) as anio, WEEK(fecha, 1) as semana');
+            $selectFecha = DB::raw("DATE_FORMAT(MIN(fecha), '%Y-%m-%d') as fecha_inicio, DATE_FORMAT(MAX(fecha), '%Y-%m-%d') as fecha_fin");
+            $groupClause = [DB::raw('YEAR(fecha)'), DB::raw('WEEK(fecha, 1)')];
+            $orderBy = [DB::raw('YEAR(fecha) DESC'), DB::raw('WEEK(fecha, 1) DESC')];
+        } elseif ($periodo === 'mes') {
+            $groupBy = DB::raw('YEAR(fecha) as anio, MONTH(fecha) as mes');
+            $selectFecha = DB::raw("DATE_FORMAT(MIN(fecha), '%Y-%m-%d') as fecha_inicio, DATE_FORMAT(MAX(fecha), '%Y-%m-%d') as fecha_fin");
+            $groupClause = [DB::raw('YEAR(fecha)'), DB::raw('MONTH(fecha)')];
+            $orderBy = [DB::raw('YEAR(fecha) DESC'), DB::raw('MONTH(fecha) DESC')];
+        } else {
+            $groupBy = DB::raw('fecha');
+            $selectFecha = DB::raw("fecha as fecha_inicio, fecha as fecha_fin");
+            $groupClause = ['fecha'];
+            $orderBy = [DB::raw('fecha DESC')];
+        }
+
+        $ventas = DB::table('ventas')
+            ->select(
+                $groupBy,
+                $selectFecha,
+                DB::raw('COUNT(*) as cantidad_ventas'),
+                DB::raw('COALESCE(SUM(precio_venta), 0) as total_ventas'),
+                DB::raw('COALESCE(SUM(valor_efectivo), 0) as total_efectivo'),
+                DB::raw('COALESCE(SUM(valor_transferencia), 0) as total_transferencia'),
+                DB::raw('COALESCE(SUM(valor_credito), 0) as total_credito')
+            )
+            ->groupBy($groupClause)
+            ->orderByRaw(implode(', ', array_map(fn($o) => $o->getValue(DB::connection()->getQueryGrammar()), $orderBy)))
+            ->limit($limite)
+            ->get();
+
+        $gastos = DB::table('gastos')
+            ->select(
+                $periodo === 'dia' ? DB::raw('fecha') : ($periodo === 'semana' ? DB::raw('YEAR(fecha) as anio, WEEK(fecha, 1) as semana') : DB::raw('YEAR(fecha) as anio, MONTH(fecha) as mes')),
+                DB::raw('COALESCE(SUM(monto), 0) as total_gastos'),
+                DB::raw('COUNT(*) as cantidad_gastos')
+            )
+            ->groupBy($groupClause)
+            ->get()
+            ->keyBy(function ($item) use ($periodo) {
+                if ($periodo === 'dia') return $item->fecha;
+                if ($periodo === 'semana') return $item->anio . '-W' . $item->semana;
+                return $item->anio . '-' . $item->mes;
+            });
+
+        $cierres = $ventas->map(function ($v) use ($periodo, $gastos) {
+            if ($periodo === 'dia') {
+                $key = $v->fecha_inicio;
+            } elseif ($periodo === 'semana') {
+                $key = $v->anio . '-W' . $v->semana;
+            } else {
+                $key = $v->anio . '-' . $v->mes;
+            }
+
+            $gasto = $gastos->get($key);
+            $totalGastos = $gasto ? (float) $gasto->total_gastos : 0;
+            $cantidadGastos = $gasto ? (int) $gasto->cantidad_gastos : 0;
+
+            return [
+                'fecha_inicio' => $v->fecha_inicio,
+                'fecha_fin' => $v->fecha_fin,
+                'cantidad_ventas' => (int) $v->cantidad_ventas,
+                'total_ventas' => (float) $v->total_ventas,
+                'total_efectivo' => (float) $v->total_efectivo,
+                'total_transferencia' => (float) $v->total_transferencia,
+                'total_credito' => (float) $v->total_credito,
+                'cantidad_gastos' => $cantidadGastos,
+                'total_gastos' => $totalGastos,
+                'balance' => (float) $v->total_ventas - $totalGastos,
+            ];
+        });
+
+        return response()->json(['data' => $cierres->values()]);
+    });
+
     Route::get('balance',function () {
-        // Obtener la misma información que se muestra en el login
         $cantidadVentas = Ventas::whereDate('fecha', now()->toDateString())->sum('cantidad');
-
-        // Obtener el total de ventas del día
         $totalVentas = Ventas::whereDate('fecha', now()->toDateString())->sum('precio_venta');
-
-        // Obtener el total de gastos del día
+        $totalEfectivo = Ventas::whereDate('fecha', now()->toDateString())->sum('valor_efectivo');
+        $totalTransferencia = Ventas::whereDate('fecha', now()->toDateString())->sum('valor_transferencia');
+        $totalCredito = Ventas::whereDate('fecha', now()->toDateString())->sum('valor_credito');
         $totalGastos = Gastos::whereDate('fecha', now()->toDateString())->sum('monto');
 
-        // Obtener el registro de monto del día actual
         $monto = Monto::whereDate('created_at', now()->toDateString())->first();
-        $montoID = Monto::whereDate('created_at', now()->toDateString())->first();
+        $montoDiario = $monto ? $monto->monto : 0;
+        $montoID = $monto ? $monto->id : null;
 
-        $montoDiario = $monto ? $monto->monto : 0; // Si $monto no es nulo, obtiene el monto, de lo contrario, asigna 0
-        $montoID = $monto ? $monto->id : null; // Si $monto no es nulo, obtiene el monto, de lo contrario, asigna 0
-
-
-        // Calcular el balance diario
         $balanceDiario = ($totalVentas + $montoDiario) - $totalGastos;
+        $efectivoEnCaja = ($montoDiario + $totalEfectivo) - $totalGastos;
 
         return response()->json([
             'success' => true,
@@ -128,6 +203,10 @@ Route::middleware(['jwt.auth'])->prefix('v1')->group(function () {
             'monto_id' => $montoID,
             'cantidad_ventas' => $cantidadVentas,
             'total_ventas' => $totalVentas,
+            'total_efectivo' => $totalEfectivo,
+            'total_transferencia' => $totalTransferencia,
+            'total_credito' => $totalCredito,
+            'efectivo_en_caja' => $efectivoEnCaja,
             'total_gastos' => $totalGastos,
             'balance_diario' => $balanceDiario,
             'monto_diario' => $montoDiario,
