@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class DevolucionClienteAlmacen extends Model
 {
     protected $fillable = [
+        'producto_id',
         'cantidad',
         'precio_venta',
         'codigo',

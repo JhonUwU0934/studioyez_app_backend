@@ -31,47 +31,60 @@ class DevolucionClienteAlmacenController extends Controller
         $data = $request->validate([
             'codigo_factura' => 'required|string',
             'codigo_producto' => 'required|string',
-            'cantidad' => 'required|string',
+            'cantidad' => 'required|integer|min:1',
         ]);
 
         $codigoProducto = $data['codigo_producto'];
         $codigoFactura = $data['codigo_factura'];
-        $cantidad = $data['cantidad'];
+        $cantidad = (int) $data['cantidad'];
 
-        // Obtener el producto por su código
         $producto = Producto::where('codigo', $codigoProducto)->first();
+        if (!$producto) {
+            return response()->json(['error' => 'Producto no encontrado'], 404);
+        }
 
-        // Obtener la venta por su código de factura
         $venta = Ventas::where('codigo_factura', $codigoFactura)->first();
+        if (!$venta) {
+            return response()->json(['error' => 'Factura no encontrada'], 404);
+        }
 
-        // Calcular la cantidad total en el almacén después de la devolución
-        $cantidadTotal = $producto->existente_en_almacen + $cantidad;
+        \DB::beginTransaction();
+        try {
+            // Actualizar stock
+            $producto->existente_en_almacen = (int) $producto->existente_en_almacen + $cantidad;
+            $producto->save();
 
-        // Actualizar la cantidad del producto en el stock
-        $producto->update([
-            'existente_en_almacen' => $cantidadTotal
-        ]);
+            // Obtener precio de la venta
+            $ventaProducto = \DB::table('venta_producto')
+                ->where('id_venta', $venta->id)
+                ->where('id_producto', $producto->id)
+                ->first();
 
-        // Obtener los detalles de la venta para el producto devuelto
-        $ventaProducto = \DB::connection('mysql')
-            ->table('venta_producto')
-            ->where('id_venta', $venta->id)
-            ->first();
+            $precioVenta = $ventaProducto ? $ventaProducto->total_producto : 0;
 
-        // Insertar registro de devolución en el almacén
-        DevolucionClienteAlmacen::insert([
-            'producto_id' => $producto->id,
-            'codigo' => $codigoProducto, // Agregar el código del producto
-            'cantidad' => $cantidad,
-            'precio_venta' => $ventaProducto->total_producto,
-            'cliente' => $venta->nombre_comprador,
-            'fecha' => date('Y-m-d'),
-            'quien_recibe' => Auth::id(),
-            'created_at' => Carbon::now()
-        ]);
+            // Crear registro de devolución
+            $devolucion = DevolucionClienteAlmacen::create([
+                'producto_id' => $producto->id,
+                'codigo' => $codigoProducto,
+                'cantidad' => $cantidad,
+                'precio_venta' => $precioVenta,
+                'cliente' => $venta->nombre_comprador,
+                'fecha' => date('Y-m-d'),
+                'quien_recibe' => Auth::id(),
+            ]);
 
-        // Devolver los detalles de la venta del producto
-        return $ventaProducto;
+            \DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Devolución registrada exitosamente',
+                'data' => $devolucion
+            ]);
+
+        } catch (\Exception $e) {
+            \DB::rollback();
+            return response()->json(['error' => 'Error al registrar devolución', 'message' => $e->getMessage()], 500);
+        }
     }
 
 
