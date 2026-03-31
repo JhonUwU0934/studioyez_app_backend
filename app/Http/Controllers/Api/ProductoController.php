@@ -20,16 +20,23 @@ class ProductoController extends Controller
         $query = $request->input('q', '');
         $limit = min((int) $request->input('limit', 20), 50);
 
-        $productos = Producto::query()
-            ->select('id', 'codigo', 'denominacion', 'existente_en_almacen')
-            ->withCount('variantes')
-            ->when(strlen($query) >= 2, function ($q) use ($query) {
-                $q->where(function ($sub) use ($query) {
-                    $sub->where('denominacion', 'LIKE', "%{$query}%")
-                        ->orWhere('codigo', 'LIKE', "%{$query}%");
-                });
-            })
-            ->orderBy('denominacion')
+        $builder = DB::table('productos')
+            ->select(
+                'productos.id',
+                'productos.codigo',
+                'productos.denominacion',
+                'productos.existente_en_almacen',
+                DB::raw('(SELECT COUNT(*) FROM producto_variantes WHERE producto_variantes.producto_id = productos.id) as variantes_count')
+            );
+
+        if (strlen($query) >= 2) {
+            $builder->where(function ($sub) use ($query) {
+                $sub->where('denominacion', 'LIKE', "%{$query}%")
+                    ->orWhere('codigo', 'LIKE', "%{$query}%");
+            });
+        }
+
+        $productos = $builder->orderBy('denominacion')
             ->limit($limit)
             ->get()
             ->map(fn ($p) => [
@@ -37,7 +44,7 @@ class ProductoController extends Controller
                 'codigo' => $p->codigo,
                 'denominacion' => $p->denominacion,
                 'existente_en_almacen' => $p->existente_en_almacen,
-                'variantes_count' => $p->variantes_count,
+                'variantes_count' => (int) $p->variantes_count,
                 'tiene_variantes' => $p->variantes_count > 0,
             ]);
 
