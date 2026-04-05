@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use App\Models\AuditoriaEliminacion;
 
 class IngresoDeMercanciaController extends Controller
 {
@@ -262,11 +264,24 @@ class IngresoDeMercanciaController extends Controller
     public function destroy($id)
     {
         try {
+            $user = Auth::user();
+            if (!$user || $user->rol !== 'admin') {
+                return response()->json(['message' => 'Solo administradores pueden eliminar ingresos.'], 403);
+            }
+
             $ingreso = IngresoDeMercancia::findOrFail($id);
-            
+
             DB::beginTransaction();
-            
-            // Revertir el stock antes de eliminar
+
+            // Snapshot para auditoría
+            AuditoriaEliminacion::create([
+                'tipo' => 'ingreso',
+                'registro_id' => $ingreso->id,
+                'datos_eliminados' => $ingreso->toArray(),
+                'usuario_id' => $user->id,
+            ]);
+
+            // Revertir stock
             if ($ingreso->producto_variante_id && $ingreso->productoVariante) {
                 $variante = $ingreso->productoVariante;
                 $variante->existente_en_almacen -= $ingreso->cantidad_de_ingreso;
@@ -276,14 +291,14 @@ class IngresoDeMercanciaController extends Controller
                 $producto->existente_en_almacen -= $ingreso->cantidad_de_ingreso;
                 $producto->save();
             }
-            
+
             $ingreso->delete();
-            
+
             DB::commit();
-            
+
             return response()->json([
                 'success' => true,
-                'message' => 'Ingreso eliminado exitosamente'
+                'message' => 'Ingreso eliminado. Stock revertido. Auditoría registrada.'
             ]);
 
         } catch (\Exception $e) {

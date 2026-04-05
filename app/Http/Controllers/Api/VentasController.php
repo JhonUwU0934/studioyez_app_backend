@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Producto;
 use App\Models\ProductoVariante;
+use App\Models\AuditoriaEliminacion;
 use App\Models\VentaProducto;
 use App\Models\Ventas;
 use Illuminate\Http\Request;
@@ -434,51 +435,59 @@ class VentasController extends Controller
     {
         try {
             $user = Auth::user();
-            if (strpos($user->name, 'Asesor') === 0) {
-                return new JsonResponse(['message' => 'No tienes permiso para ejecutar esta acción.'], 403);
+            if (!$user || $user->rol !== 'admin') {
+                return new JsonResponse(['message' => 'Solo administradores pueden eliminar ventas.'], 403);
             }
 
             DB::beginTransaction();
-            
+
             $venta = Ventas::findOrFail($id);
-            
-            // Devolver stock a las variantes antes de eliminar
+
+            // Snapshot para auditoría
             $productosVenta = DB::table('venta_producto')
                 ->where('id_venta', $venta->id)
                 ->get();
-                
+
+            AuditoriaEliminacion::create([
+                'tipo' => 'venta',
+                'registro_id' => $venta->id,
+                'datos_eliminados' => [
+                    'venta' => $venta->toArray(),
+                    'productos' => $productosVenta->toArray(),
+                ],
+                'usuario_id' => $user->id,
+            ]);
+
+            // Devolver stock
             foreach ($productosVenta as $productoVenta) {
-                // Devolver stock a la variante
                 if ($productoVenta->id_producto_variante) {
                     $variante = ProductoVariante::find($productoVenta->id_producto_variante);
                     if ($variante) {
-                        $variante->update([
-                            'existente_en_almacen' => $variante->existente_en_almacen + intval($productoVenta->cantidad)
-                        ]);
+                        $variante->existente_en_almacen += intval($productoVenta->cantidad);
+                        $variante->save();
                     }
                 }
-                
-                // Devolver stock al producto base
+
                 $producto = Producto::find($productoVenta->id_producto);
                 if ($producto) {
-                    $producto->update([
-                        'existente_en_almacen' => $producto->existente_en_almacen + intval($productoVenta->cantidad)
-                    ]);
+                    $producto->existente_en_almacen += intval($productoVenta->cantidad);
+                    $producto->save();
                 }
             }
 
             $venta->delete();
-            
+
             DB::commit();
-            
-            return response()->json(['message' => 'Venta eliminada correctamente']);
-            
+
+            return response()->json(['message' => 'Venta eliminada. Stock revertido. Auditoría registrada.']);
+
         } catch (\Exception $e) {
             DB::rollback();
             Log::error('Error al eliminar venta: ' . $e->getMessage());
-            
+
             return response()->json([
-                'error' => 'Error al eliminar la venta: ' . $e->getMessage()
+                'error' => 'Error al eliminar la venta',
+                'message' => $e->getMessage()
             ], 500);
         }
     }
