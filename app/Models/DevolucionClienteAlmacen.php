@@ -8,6 +8,7 @@ class DevolucionClienteAlmacen extends Model
 {
     protected $fillable = [
         'producto_id',
+        'producto_variante_id',
         'cantidad',
         'precio_venta',
         'codigo',
@@ -15,6 +16,11 @@ class DevolucionClienteAlmacen extends Model
         'fecha',
         'quien_recibe',
     ];
+
+    public function productoVariante()
+    {
+        return $this->belongsTo(ProductoVariante::class, 'producto_variante_id');
+    }
 
     public function producto()
     {

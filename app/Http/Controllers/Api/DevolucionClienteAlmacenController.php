@@ -19,7 +19,8 @@ class DevolucionClienteAlmacenController extends Controller
      */
     public function index()
     {
-        $devolucionClienteAlmacen = DevolucionClienteAlmacen::latest('created_at')->get();
+        $devolucionClienteAlmacen = DevolucionClienteAlmacen::with(['producto', 'productoVariante', 'vendedor'])
+            ->latest('created_at')->get();
         return DevolucionClienteAlmacenResource::collection($devolucionClienteAlmacen);
     }
 
@@ -31,12 +32,14 @@ class DevolucionClienteAlmacenController extends Controller
         $data = $request->validate([
             'codigo_factura' => 'required|string',
             'codigo_producto' => 'required|string',
+            'producto_variante_id' => 'nullable|integer',
             'cantidad' => 'required|integer|min:1',
         ]);
 
         $codigoProducto = $data['codigo_producto'];
         $codigoFactura = $data['codigo_factura'];
         $cantidad = (int) $data['cantidad'];
+        $varianteId = $data['producto_variante_id'] ?? null;
 
         $producto = Producto::where('codigo', $codigoProducto)->first();
         if (!$producto) {
@@ -50,9 +53,18 @@ class DevolucionClienteAlmacenController extends Controller
 
         \DB::beginTransaction();
         try {
-            // Actualizar stock
+            // Revertir stock al producto base
             $producto->existente_en_almacen = (int) $producto->existente_en_almacen + $cantidad;
             $producto->save();
+
+            // Revertir stock a la variante si aplica
+            if ($varianteId) {
+                $variante = ProductoVariante::find($varianteId);
+                if ($variante) {
+                    $variante->existente_en_almacen = (int) $variante->existente_en_almacen + $cantidad;
+                    $variante->save();
+                }
+            }
 
             // Obtener precio de la venta
             $ventaProducto = \DB::table('venta_producto')
@@ -65,6 +77,7 @@ class DevolucionClienteAlmacenController extends Controller
             // Crear registro de devolución
             $devolucion = DevolucionClienteAlmacen::create([
                 'producto_id' => $producto->id,
+                'producto_variante_id' => $varianteId,
                 'codigo' => $codigoProducto,
                 'cantidad' => $cantidad,
                 'precio_venta' => $precioVenta,
