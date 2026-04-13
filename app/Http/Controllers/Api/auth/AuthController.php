@@ -47,7 +47,10 @@ class AuthController extends Controller
         }
         $user = Auth::user();
 
-        $cantidadVentas = Ventas::whereDate('fecha', now()->toDateString())->sum('cantidad');
+        $cantidadVentas = \Illuminate\Support\Facades\DB::table('venta_producto')
+            ->join('ventas', 'venta_producto.id_venta', '=', 'ventas.id')
+            ->whereDate('ventas.fecha', now()->toDateString())
+            ->sum('venta_producto.cantidad');
 
         // Obtener el total de ventas del día
         $totalVentas = Ventas::whereDate('fecha', now()->toDateString())->sum('precio_venta');

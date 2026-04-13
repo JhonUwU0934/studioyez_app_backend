@@ -293,7 +293,10 @@ Route::middleware(['jwt.auth'])->prefix('v1')->group(function () {
     });
 
     Route::get('balance',function () {
-        $cantidadVentas = Ventas::whereDate('fecha', now()->toDateString())->sum('cantidad');
+        $cantidadVentas = DB::table('venta_producto')
+            ->join('ventas', 'venta_producto.id_venta', '=', 'ventas.id')
+            ->whereDate('ventas.fecha', now()->toDateString())
+            ->sum('venta_producto.cantidad');
         $totalVentas = Ventas::whereDate('fecha', now()->toDateString())->sum('precio_venta');
         $totalEfectivo = Ventas::whereDate('fecha', now()->toDateString())->sum('valor_efectivo');
         $totalTransferencia = Ventas::whereDate('fecha', now()->toDateString())->sum('valor_transferencia');

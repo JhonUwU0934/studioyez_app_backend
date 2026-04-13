@@ -8,6 +8,7 @@ use App\Models\Monto;
 use App\Http\Resources\MontoResource;
 use App\Models\Ventas;
 use App\Models\Gastos;
+use Illuminate\Support\Facades\DB;
 class MontoController extends Controller
 {
     public function index()
@@ -25,7 +26,10 @@ class MontoController extends Controller
         $monto = Monto::create($data);
 
         // Obtener la misma información que se muestra en el login
-        $cantidadVentas = Ventas::whereDate('fecha', now()->toDateString())->sum('cantidad');
+        $cantidadVentas = DB::table('venta_producto')
+            ->join('ventas', 'venta_producto.id_venta', '=', 'ventas.id')
+            ->whereDate('ventas.fecha', now()->toDateString())
+            ->sum('venta_producto.cantidad');
         $totalVentas = Ventas::whereDate('fecha', now()->toDateString())->sum('precio_venta');
         $totalGastos = Gastos::whereDate('fecha', now()->toDateString())->sum('monto');
         $montoDiario = Monto::whereDate('created_at', now()->toDateString())->first()->monto;
@@ -71,7 +75,10 @@ class MontoController extends Controller
         $monto->update($data);
 
         // Obtener la misma información que se muestra en el login
-        $cantidadVentas = Ventas::whereDate('fecha', now()->toDateString())->sum('cantidad');
+        $cantidadVentas = DB::table('venta_producto')
+            ->join('ventas', 'venta_producto.id_venta', '=', 'ventas.id')
+            ->whereDate('ventas.fecha', now()->toDateString())
+            ->sum('venta_producto.cantidad');
         $totalVentas = Ventas::whereDate('fecha', now()->toDateString())->sum('precio_venta');
         $totalGastos = Gastos::whereDate('fecha', now()->toDateString())->sum('monto');
         $montoDiario = Monto::whereDate('created_at', now()->toDateString())->first()->monto;
