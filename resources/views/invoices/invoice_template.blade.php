@@ -223,18 +223,32 @@
 
         /* Change section */
         .change-section {
-            margin: 8px 0;
-            padding: 5px 0;
+            margin: 10px 0;
+            padding: 8px 4px;
             text-align: center;
-            background-color: #f0f0f0;
-            border: 1px dashed black;
+            background-color: #000;
+            color: #fff;
+            border: 2px solid black;
             font-weight: bold;
         }
 
+        .change-label {
+            font-size: 11px;
+            letter-spacing: 1px;
+            margin-bottom: 2px;
+        }
+
         .change-amount {
-            font-size: 14px;
+            font-size: 20px;
             font-weight: bold;
             margin: 2px 0;
+            letter-spacing: 1px;
+        }
+
+        .change-hint {
+            font-size: 9px;
+            margin-top: 3px;
+            font-style: italic;
         }
 
         /* Summary section */
@@ -455,8 +469,9 @@
         @if($venta->estadisticas['hubo_cambio'])
         <!-- Change -->
         <div class="change-section">
-            <div class="small">CAMBIO DEVUELTO</div>
+            <div class="change-label">CAMBIO A DEVOLVER</div>
             <div class="change-amount">${{ number_format($venta->estadisticas['valor_devuelto'], 0, ',', '.') }}</div>
+            <div class="change-hint">Entregar al cliente</div>
         </div>
         @endif
 
