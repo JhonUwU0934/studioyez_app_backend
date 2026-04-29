@@ -38,7 +38,7 @@ class FacturaController extends Controller
                 ], 404);
             }
 
-            // Obtener productos con info de variantes
+            // Obtener productos con info de variantes (con COALESCE para evitar nulls)
             $productos = DB::table('productos')
                 ->join('venta_producto', 'productos.id', '=', 'venta_producto.id_producto')
                 ->leftJoin('producto_variantes', 'venta_producto.id_producto_variante', '=', 'producto_variantes.id')
@@ -50,11 +50,11 @@ class FacturaController extends Controller
                     'productos.codigo',
                     'productos.denominacion',
                     'productos.imagen as producto_imagen',
-                    'venta_producto.cantidad',
-                    'venta_producto.total_producto',
-                    'venta_producto.descuento',
+                    DB::raw('COALESCE(venta_producto.cantidad, 0) as cantidad'),
+                    DB::raw('COALESCE(venta_producto.total_producto, 0) as total_producto'),
+                    DB::raw('COALESCE(venta_producto.descuento, 0) as descuento'),
                     'venta_producto.sku_vendido',
-                    'venta_producto.precio_unitario_vendido',
+                    DB::raw('COALESCE(venta_producto.precio_unitario_vendido, productos.precio_por_unidad, 0) as precio_unitario_vendido'),
                     'producto_variantes.id as variante_id',
                     'producto_variantes.sku as variante_sku',
                     'producto_variantes.imagen_variante',
@@ -178,13 +178,13 @@ class FacturaController extends Controller
     private function calcularEstadisticasFactura($venta, $productos)
     {
         $totalProductos = $productos->count();
-        $cantidadTotal = $productos->sum('cantidad');
-        $totalDescuentos = $productos->sum('descuento');
-        $subtotal = $productos->sum('total_producto') + $totalDescuentos;
+        $cantidadTotal = (int) $productos->sum('cantidad');
+        $totalDescuentos = (float) $productos->sum('descuento');
+        $subtotal = (float) $productos->sum('total_producto') + $totalDescuentos;
 
-        // Información de pago
-        $totalPagado = ($venta->valor_efectivo ?? 0) + ($venta->valor_transferencia ?? 0) + ($venta->valor_credito ?? 0);
-        $valorDevuelto = $venta->valor_devuelto ?? 0;
+        // Información de pago (cast a float defensivo)
+        $totalPagado = (float)($venta->valor_efectivo ?? 0) + (float)($venta->valor_transferencia ?? 0) + (float)($venta->valor_credito ?? 0);
+        $valorDevuelto = (float)($venta->valor_devuelto ?? 0);
 
         // Tipo de pago
         $tipoPago = 'Contado';
@@ -208,12 +208,12 @@ class FacturaController extends Controller
             'cantidad_total' => $cantidadTotal,
             'subtotal' => $subtotal,
             'total_descuentos' => $totalDescuentos,
-            'total_final' => $venta->precio_venta,
+            'total_final' => (float)($venta->precio_venta ?? 0),
             'total_pagado' => $totalPagado,
             'valor_devuelto' => $valorDevuelto,
             'tipo_pago' => $tipoPago,
-            'valor_efectivo' => $venta->valor_efectivo ?? 0,
-            'valor_transferencia' => $venta->valor_transferencia ?? 0,
+            'valor_efectivo' => (float)($venta->valor_efectivo ?? 0),
+            'valor_transferencia' => (float)($venta->valor_transferencia ?? 0),
             'fecha_formateada' => $venta->created_at ? \Carbon\Carbon::parse($venta->created_at)->format('d/m/Y H:i:s') : date('d/m/Y H:i:s'),
             'tiene_variantes' => $productos->whereNotNull('variante_id')->count() > 0,
             'tiene_descuentos' => $totalDescuentos > 0,
